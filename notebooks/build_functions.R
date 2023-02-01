@@ -1,5 +1,6 @@
 require(calculus)
 require(MGLM)
+require(microbenchmark)
 
 set.seed(321)
 
@@ -20,6 +21,8 @@ Y2 <- rgdirmn(n, size, a2, b2)
 
 sample1 <- Y1[1,]
 sample2 <- Y2[1,]
+
+#### Example ####
 
 to_params <- function(l) {
   z <- as.list(l)
@@ -70,6 +73,8 @@ add_params(call_with_x("dnorm"), to_params(c(mean=0,sd=3)))
 ff <- fitmix(data, dist=c("norm","chisq"), params=list(c(mean=0,sd=3),c(df=2)),
              weights=c(0.5,0.5))
 
+ff
+
 ff(0, list(mean=3, sd=2, df=2))
 
 0.5 * dnorm(0, mean = 3, sd = 2) + 0.5 * dchisq(0, df = 2)
@@ -85,55 +90,64 @@ multroot <- function(...) {
 
 # eval(multroot(1, 2, 3, 4))
 
-flatten_params <- function (param_list) {
+flatten_params <- function (param_list, dindex) {
 
   params_flat <- list()
+  param_names <- c("Y", "alpha", "beta")
 
-  for (p in 1:length(params)) {
+  for (p in 1:length(param_list)) {
 
-    alpha_names <- setNames(params[[p]][[1]],
-                            paste0("alpha", p, "_", 1:length(params[[p]][[1]])))
+    ls <- setNames(param_list[[p]],
+                   paste0(param_names[p], dindex, "_", 1:length(param_list[[p]])))
 
-    beta_names <- setNames(params[[p]][[2]],
-                           paste0("beta", p, "_", 1:length(params[[p]][[2]])))
-    params_flat <- append(params_flat, alpha_names)
-    params_flat <- append(params_flat, beta_names)
+    params_flat <- append(params_flat, ls)
 
   }
 
   return(params_flat)
 }
 
-params <- list(list(a1, b1), list(a2, b2))
-flatten_params(params)
+params <- list(Y1[1,], a1, b1)
+flatten_params(params, 1)
 
 make_args <- function(x) {
-  setNames(lapply(names(x), function(y) bquote(args[[.(y)]])), names(x))
+  lapply(names(x), function(y) bquote(args[[.(y)]]))
 }
 
-all_args <- make_args(flatten_params(params))
+make_args(flatten_params(params, 1))
 
-dist_wrapper <- function (dist_pf, Y, dindex, ...) {
+dist_wrapper <- function (dist_pf, ...) {
 
-  params <- unlist(list(...))
+  params <- list(...)
 
-  alpha <- params[grep(paste0("alpha", dindex), names(params))]
-  beta <- params[grep(paste0("beta", dindex), names(params))]
+  # alpha <- params[grep(paste0("alpha", dindex), names(params))]
+  # beta <- params[grep(paste0("beta", dindex), names(params))]
 
-  as.call(list(match.fun(dist_pf), Y, alpha, beta))
+  as.call(list(match.fun(dist_pf), ...))
 }
 
-dgd <- function (Y, a, b) {
+dgd <- function (args) {
 
-  m <- sum(Y)
-  z <- rev(cumsum(rev(Y)))
-  logC <- lgamma(m + 1) - sum(lgamma(Y + 1))
+  Y <- args[grep("Y", names(args))]
+  a <- args[grep("alpha", names(args))]
+  b <- args[grep("beta", names(args))]
+
+  m <- Reduce(sum, Y)
+  z <- rev(Y)
+
+  for (j in 2:length(z)) {
+    z[[j]] <- z[[j]] + z[[j - 1]]
+  }
+  z <- rev(z)
+  logC <- lgamma(m + 1) -
+    Reduce(sum, Map(function (x) lgamma(x + 1), Y))
 
   l <- logC
 
   for (i in 1:length(a)) {
+
     l <- l + (
-      lgamma(a[[i]] + Y[i]) + lgamma(b[[i]] + z[i+1]) + lgamma(a[[i]] + b[[i]]) -
+      lgamma(a[[i]] + Y[[i]]) + lgamma(b[[i]] + z[[i+1]]) + lgamma(a[[i]] + b[[i]]) -
         (lgamma(a[[i]]) + lgamma(b[[i]]) + lgamma(a[[i]] + b[[i]] + z[[i]]))
     )
   }
@@ -142,27 +156,56 @@ dgd <- function (Y, a, b) {
 }
 
 microbenchmark(
-  dgd(Y1[1,], list(1, 2, 3, 4), list(4, 3, 2, 1)),
-  dgdirmn(Y1[1,], c(1, 2, 3, 4), c(4, 3, 2, 1)),
+  dgd(flatten_params(
+    list(Y1[1,], 1:4, 4:1), 1)),
+  dgdirmn(Y1[1,], 1:4, 4:1),
   times = 100,
   check = "equal"
 )
 
 
-dist_wrapper("dgd", Y1[1,], dindex = 1, all_args)
+dist_wrapper("dgd", flatten_params(params, 1))
 
-integral_fun <- function(data, dist_fun, dindices, params) {
+generate_fun <- function(dist_fun, params, dindices) {
 
-  fb <- Reduce(multroot, Map(function(d, s, i, p) {
-    dist_wrapper(d, s, i, make_args(flatten_params(p)))
-  }, dist_fun, data, dindices, params))
-  f <- function(Y, args) {}
+  dist_expr <- Map(function(d, p, i) {
+    dist_wrapper(d, flatten_params(p, i))
+  }, dist_fun, params, dindices)
+
+  fb <- Reduce(multroot, dist_expr)
+  f <- function(args, ...) {}
   body(f) <- fb
   f
 }
 
-integral_fun(
-  data = list(Y1[1,], Y2[1,]),
-  dist_fun = rep("dgd", 2),
-  dindices = 1:2,
-  params = list(c(a1, b1), c(a2, b2)))
+integral_fun <- generate_fun(
+  dist_fun = "dgd",
+  params = list(list(Y1[1,],  a1, b1), list(Y2[1,], a2, b2)),
+  dindices = 1:2)
+
+eval(integral_fun(NULL))
+
+# bounds <- append(
+#   rep(list(c(0, Inf)), length(a1) * 4),
+#   rep(list(1), length(Y1[1,]) * 2)
+# )
+
+bounds <- rep(list(c(0, 10)), length(a1) * 4)
+bound_names <- rbind.data.frame(
+  expand.grid(
+    c("alpha", "beta"),
+    1:2,
+    1:length(a1))
+  # ,
+  # expand.grid(
+  #   "Y",
+  #   1:2,
+  #   1:length(Y1[1,])
+  # )
+)
+bound_names <- apply(bound_names, 1,
+                     function (x) paste0(x[1], x[2], "_", x[3]))
+names(bounds) <- bound_names
+
+integral(integral_fun, bounds, verbose = T)
+
