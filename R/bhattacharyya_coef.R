@@ -23,12 +23,12 @@ bhattacharyyaC_MN <- function (p, q) {
 #' @param a2 Vector of alpha parameters for Dirichlet distribution 2. All alpha must be > 0.
 #' @return The value of BC
 #' @examples
-#' high_agreement <- bhattacharyyaC_D(c(0.5, 0.4, 0.1), c(0.4, 0.4, 0.2));
-#' low_agreement <- bhattacharyyaC_D(c(0.5, 0.4, 0.1), c(0.1, 0.5, 0.4));
+#' high_agreement <- bhattacharyyaC_D(c(5, 4, 1), c(4, 4, 2));
+#' low_agreement <- bhattacharyyaC_D(c(5, 4, 1), c(1, 5, 4));
 #' @export
 bhattacharyyaC_D <- function(a1, a2) {
 
-  if (any(a1) <= 0 || any(a2) <= 0)
+  if (any(a1 <= 0) || any(a2 <= 0))
     stop("All Dirichlet paramters should be > 0")
 
   # formula from Rauber et al. 2008 (https://ieeexplore.ieee.org/document/4604388)

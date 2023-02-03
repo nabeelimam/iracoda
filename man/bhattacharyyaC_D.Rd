@@ -4,12 +4,12 @@
 \alias{bhattacharyyaC_D}
 \title{Bhattacharyya coefficient for two Dirichlet distributions}
 \usage{
-bhattacharyyaC_D(p, q)
+bhattacharyyaC_D(a1, a2)
 }
 \arguments{
-\item{p}{Vector of mean probabilities for Dirichlet distribution 1, should sum to 1.}
+\item{a1}{Vector of alpha parameters for Dirichlet distribution 1. All alpha must be > 0.}
 
-\item{q}{Vector of mean probabilities for Dirichlet distribution 2, should sum to 1.}
+\item{a2}{Vector of alpha parameters for Dirichlet distribution 2. All alpha must be > 0.}
 }
 \value{
 The value of BC
@@ -18,6 +18,6 @@ The value of BC
 Calculate the Bhattacharyya coefficient (BC) for two Dirichlet distributions
 }
 \examples{
-high_agreement <- bhattacharyyaC_D(c(0.5, 0.4, 0.1), c(0.4, 0.4, 0.2));
-low_agreement <- bhattacharyyaC_D(c(0.5, 0.4, 0.1), c(0.1, 0.5, 0.4));
+high_agreement <- bhattacharyyaC_D(c(5, 4, 1), c(4, 4, 2));
+low_agreement <- bhattacharyyaC_D(c(5, 4, 1), c(1, 5, 4));
 }
